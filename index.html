@@ -105,9 +105,10 @@
         let analyzeInterval;
         let sessionHistory = []; 
 
+        // دالة نطق الصوت
         function speakFeedback(text) {
             if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel();
+                window.speechSynthesis.cancel(); // باش ما يتداخلش الصوت
                 const msg = new SpeechSynthesisUtterance(text);
                 msg.lang = 'en-US';
                 msg.rate = 1.0;
@@ -115,6 +116,7 @@
             }
         }
 
+        // دالة التقاط الصورة وإرسالها للسيرفور
         async function captureAndAnalyze() {
             if (!isRecording) return;
             const context = canvas.getContext('2d');
@@ -128,20 +130,27 @@
                 const response = await fetch('/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: imageData, mode: userMode.value })
+                    body: JSON.stringify({ 
+                        image: imageData, 
+                        mode: userMode.value,
+                        history: sessionHistory // إرسال الذاكرة
+                    })
                 });
                 
                 const result = await response.json();
                 if (result.feedback) {
                     feedbackText.textContent = result.feedback;
-                    sessionHistory.push(result.feedback); 
+                    sessionHistory.push(result.feedback); // تخزين الجواب فالذاكرة
                     speakFeedback(result.feedback);
+                } else if (result.error) {
+                    console.error("Server Error:", result.error);
                 }
             } catch (error) {
                 console.error("Analysis Error:", error);
             }
         }
 
+        // دالة جلب التقرير النهائي
         async function generateFinalReport() {
             reportModal.classList.remove('hidden');
             document.getElementById('reportScore').textContent = "...";
@@ -167,11 +176,18 @@
             }
         }
 
+        // زر التشغيل والإيقاف
         startBtn.addEventListener('click', async () => {
             if (!isRecording) {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
                     video.srcObject = stream;
+                    
+                    // خدعة تشغيل الصوت فالهاتف (تفعيل الـ Audio Context)
+                    if ('speechSynthesis' in window) {
+                        const wakeUpMsg = new SpeechSynthesisUtterance("");
+                        window.speechSynthesis.speak(wakeUpMsg);
+                    }
                     
                     sessionHistory = []; 
                     startBtn.innerHTML = '<i class="fa-solid fa-stop"></i> <span>End Session & Get Report</span>';
@@ -180,10 +196,12 @@
                     indicator.classList.remove('hidden');
                     feedbackBox.classList.remove('hidden');
                     feedbackBox.classList.add('flex');
-                    feedbackText.textContent = "Great! Let's check your form...";
+                    feedbackText.textContent = "Coach is preparing your first exercise...";
                     userMode.disabled = true;
                     isRecording = true;
 
+                    // البدأ بعد ثانية واحدة، ثم إعادة التحليل كل 6 ثواني
+                    setTimeout(captureAndAnalyze, 1000);
                     analyzeInterval = setInterval(captureAndAnalyze, 6000); 
                     
                 } catch (err) {
@@ -206,6 +224,7 @@
             }
         });
 
+        // زر إغلاق نافذة التقرير
         document.getElementById('closeModalBtn').addEventListener('click', () => {
             reportModal.classList.add('hidden');
             feedbackBox.classList.add('hidden');
