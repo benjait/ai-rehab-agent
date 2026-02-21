@@ -38,7 +38,7 @@
         <button id="startBtn" class="w-full md:w-auto bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-bold text-xl py-4 px-12 rounded-full shadow-lg transition-all transform hover:scale-105">
             <i class="fa-solid fa-microphone-lines mr-2"></i> Connect to AI Coach
         </button>
-        <p id="systemMsg" class="mt-4 text-slate-400 text-sm font-medium h-6"></p>
+        <p id="systemMsg" class="mt-4 text-slate-400 text-sm font-medium min-h-[24px] transition-colors duration-300"></p>
     </div>
 
     <script>
@@ -57,7 +57,7 @@
         let imageInterval;
         let isConnected = false;
 
-        // دالة تشغيل الصوت الحقيقي ديال Gemini (24kHz PCM)
+        // دالة تشغيل الصوت الحقيقي ديال Gemini
         function playGeminiAudio(base64String) {
             if (!playContext) {
                 playContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
@@ -88,7 +88,10 @@
 
         async function startLiveSession() {
             try {
+                // إرجاع لون النص للحالة العادية قبل البدأ
+                systemMsg.className = "mt-4 text-slate-400 text-sm font-medium min-h-[24px] transition-colors duration-300";
                 systemMsg.textContent = "Requesting camera and microphone...";
+                
                 stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
                 video.srcObject = stream;
 
@@ -103,7 +106,7 @@
                     startBtn.className = "w-full md:w-auto bg-red-600 hover:bg-red-500 text-white font-bold text-xl py-4 px-12 rounded-full shadow-lg transition-all pulse-ring";
                     statusIndicator.classList.remove('hidden');
 
-                    // 1. التقاط المايكروفون وإرسال الصوت (16kHz PCM)
+                    // 1. التقاط وإرسال الصوت
                     audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
                     const source = audioContext.createMediaStreamSource(stream);
                     processor = audioContext.createScriptProcessor(4096, 1, 1);
@@ -123,42 +126,54 @@
                     };
                     
                     const gainNode = audioContext.createGain();
-                    gainNode.gain.value = 0; // باش ما تسمعش صوتك كيتعاود
+                    gainNode.gain.value = 0; 
                     source.connect(processor);
                     processor.connect(gainNode);
                     gainNode.connect(audioContext.destination);
 
-                    // 2. إرسال صورة كل ثانية
+                    // 2. التقاط وإرسال الصورة
                     imageInterval = setInterval(() => {
                         if (ws.readyState === WebSocket.OPEN) {
                             const context = canvas.getContext('2d');
                             canvas.width = video.videoWidth;
                             canvas.height = video.videoHeight;
                             context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            // ضغط الصورة باش تمشي بالزربة
                             const imageData = canvas.toDataURL('image/jpeg', 0.4);
                             ws.send(JSON.stringify({ image: imageData }));
                         }
                     }, 1500);
                 };
 
+                // 🔥 التعديل المهم: استقبال الأخطاء من السيرفور وعرضها
                 ws.onmessage = (event) => {
                     const data = JSON.parse(event.data);
                     if (data.audio) {
                         playGeminiAudio(data.audio);
+                    } else if (data.error) {
+                        console.error("Server Error:", data.error);
+                        systemMsg.textContent = "❌ " + data.error;
+                        systemMsg.classList.remove("text-slate-400");
+                        systemMsg.classList.add("text-red-500", "font-bold"); // تغيير اللون للاحمر
                     }
                 };
 
-                ws.onclose = () => { stopLiveSession(); systemMsg.textContent = "Connection closed."; };
+                ws.onclose = () => { 
+                    stopLiveSession(); 
+                    if (!systemMsg.textContent.includes("❌")) {
+                        systemMsg.textContent = "Connection closed."; 
+                    }
+                };
 
             } catch (err) {
                 console.error(err);
-                systemMsg.textContent = "Error: Please allow Camera & Mic access.";
+                systemMsg.textContent = "❌ Error: Please allow Camera & Mic access.";
+                systemMsg.classList.remove("text-slate-400");
+                systemMsg.classList.add("text-red-500", "font-bold");
             }
         }
 
         function stopLiveSession() {
-            if (ws) ws.close();
+            if (ws && ws.readyState !== WebSocket.CLOSED) ws.close();
             if (stream) stream.getTracks().forEach(t => t.stop());
             if (audioContext) audioContext.close();
             if (processor) processor.disconnect();
