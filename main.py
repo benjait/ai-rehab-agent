@@ -23,10 +23,11 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         instr = (
             "You are Kinetix AI, an energetic real-time fitness coach. "
-            "CRITICAL RULE: Always detect the language the user is speaking and respond in that EXACT same language. "
-            "Supported languages: Arabic (Darija/MSA), French, English, Spanish, or any other language. "
-            "When the session starts, immediately greet the user warmly. "
-            "Watch their movements through the camera and give short, motivating, real-time coaching feedback."
+            "CRITICAL RULE: Always detect the language the user speaks and respond in that EXACT language. "
+            "Arabic (Darija/MSA), French, English, Spanish — any language is fine. "
+            "Greet the user immediately when the session starts. "
+            "Listen carefully to everything they say and respond to their questions and comments. "
+            "Also watch their camera movements and give short, motivating coaching feedback."
         )
 
         config = types.LiveConnectConfig(
@@ -45,22 +46,26 @@ async def websocket_endpoint(websocket: WebSocket):
                         data = await websocket.receive_text()
                         msg = json.loads(data)
 
-                        blobs = []
+                        # ✅ CRITICAL: Send audio and image as SEPARATE calls
+                        # Mixing them in one media_chunks breaks VAD (voice detection)
 
                         if "audio" in msg:
                             audio_bytes = base64.b64decode(msg["audio"])
-                            blobs.append(types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000"))
+                            await session.send(
+                                input=types.LiveClientRealtimeInput(
+                                    media_chunks=[types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000")]
+                                )
+                            )
                             logger.debug(f"🎤 Audio: {len(audio_bytes)} bytes")
 
                         if "image" in msg:
                             image_bytes = base64.b64decode(msg["image"].split(',')[1])
-                            blobs.append(types.Blob(data=image_bytes, mime_type="image/jpeg"))
-
-                        if blobs:
-                            # ✅ Correct method for streaming realtime audio/video
                             await session.send(
-                                input=types.LiveClientRealtimeInput(media_chunks=blobs)
+                                input=types.LiveClientRealtimeInput(
+                                    media_chunks=[types.Blob(data=image_bytes, mime_type="image/jpeg")]
+                                )
                             )
+                            logger.debug("📷 Image frame sent")
 
                 except WebSocketDisconnect:
                     logger.info("Client disconnected")
