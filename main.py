@@ -21,18 +21,18 @@ async def websocket_endpoint(websocket: WebSocket):
     client = genai.Client(api_key=API_KEY, http_options={'api_version': 'v1beta'})
     
     try:
-        # تعليمات صارمة لـ Gemini باش يبدا الهضرة فالبلاصة
-        instr = "You are Kinetix AI Coach. IMMEDIATELY GREET the user with voice when they connect. Keep instructions short and energetic."
+        # تعليمات باش Gemini يبدا الهضرة فالبلاصة غير يوقع الاتصال
+        instr = "You are Kinetix AI. IMMEDIATELY start the session by greeting the user. Tell them you are ready to watch their movements. Be energetic!"
         config = types.LiveConnectConfig(
             response_modalities=["AUDIO"], 
             system_instruction=types.Content(parts=[types.Part.from_text(text=instr)])
         )
         
-        # الموديل اللي بان فـ Logs ديالك أنه خدام
+        # الموديل المستقر اللي بان فـ Logs ديالك
         model_id = "gemini-2.5-flash-native-audio-preview-12-2025"
         
         async with client.aio.live.connect(model=model_id, config=config) as session:
-            logger.info(f"🟢 Stable Session: {model_id}")
+            logger.info(f"🟢 Session Active: {model_id}")
 
             async def receive_from_client():
                 try:
@@ -40,9 +40,10 @@ async def websocket_endpoint(websocket: WebSocket):
                         data = await websocket.receive_text()
                         msg = json.loads(data)
                         if "image" in msg:
-                            img_bytes = base64.b64decode(msg["image"].split(',')[1])
-                            await session.send(input=types.LiveClientContent(turns=[types.Content(parts=[types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg")])]))
+                            # صيفط الصورة لـ Gemini
+                            await session.send(input=types.LiveClientContent(turns=[types.Content(parts=[types.Part.from_bytes(data=base64.b64decode(msg["image"].split(',')[1]), mime_type="image/jpeg")])]))
                         if "audio" in msg:
+                            # صيفط الصوت لـ Gemini
                             await session.send(input=types.LiveClientContent(turns=[types.Content(parts=[types.Part.from_bytes(data=base64.b64decode(msg["audio"]), mime_type="audio/pcm;rate=16000")])]))
                 except Exception: pass
 
