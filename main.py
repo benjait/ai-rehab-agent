@@ -41,8 +41,8 @@ async def websocket_endpoint(websocket: WebSocket):
             )
         )
 
-        # ✅ المودل الصحيح اللي كيدعم bidiGenerateContent مع v1beta
-        model_id = "gemini-2.0-flash-live-001"
+        # ✅ المودل الشغال حالياً مع v1beta + bidiGenerateContent (فبراير 2026)
+        model_id = "gemini-2.5-flash-native-audio-preview-12-2025"
 
         async with client.aio.live.connect(model=model_id, config=config) as session:
             logger.info(f"🟢 Live Connection established with {model_id}")
