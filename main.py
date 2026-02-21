@@ -1,115 +1,98 @@
 import os
+import json
 import base64
+import asyncio
 import logging
-from flask import Flask, send_file, request, jsonify
+import uvicorn
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 from google import genai
+from google.genai import types
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+app = FastAPI()
 API_KEY = os.environ.get("GEMINI_API_KEY")
 
-@app.route('/')
-def index():
-    return send_file('index.html')
+@app.get("/")
+async def get():
+    with open("index.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(f.read())
 
-@app.route('/analyze', methods=['POST'])
-def analyze():
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
     if not API_KEY:
-        return jsonify({"error": "Server configuration error."}), 500
+        await websocket.send_json({"error": "Missing API KEY"})
+        await websocket.close()
+        return
 
-    try:
-        data = request.get_json()
-        if not data or 'image' not in data:
-            return jsonify({"error": "Missing image data."}), 400
-
-        image_data = data.get('image')
-        mode = data.get('mode', 'desk') 
-        # جبنا الذاكرة باش الوكيل يعقل أشنو قال للمستخدم
-        history = data.get('history', [])
-
-        valid_modes = ['desk', 'rehab', 'yoga', 'senior']
-        if mode not in valid_modes:
-            mode = 'desk'
-
-        # هنا بدلنا العقلية ديال الذكاء الاصطناعي باش يولي هو "القائد"
-        history_text = "Session just started." if not history else "\n".join(history[-3:]) # كنعطيوه غير اخر 3 جمل باش مايتلفش
-        
-        prompt = f"""
-        You are a proactive AI Coach leading a '{mode}' physical session. 
-        You MUST LEAD the session. Do not just passively observe.
-        
-        Here is what you have instructed the user so far:
-        [{history_text}]
-        
-        YOUR TASK:
-        1. If the session just started (no history), warmly greet the user and INSTRUCT them to do their FIRST specific exercise.
-        2. If an exercise is ongoing, look at the user's image. Are they doing the exercise you asked for? If wrong, correct their form gently.
-        3. If they are doing it perfectly, praise them and INSTRUCT them to move to the NEXT exercise.
-        
-        RULES:
-        - Keep it very conversational, energetic, and natural.
-        - NEVER give long paragraphs. ONLY 1 or 2 short sentences.
-        - Talk directly to the user (e.g., "Great job! Now, let's stretch your arms...").
-        """
-
-        try:
-            base64_str = image_data.split(',')[1] if "," in image_data else image_data
-            image_bytes = base64.b64decode(base64_str)
-        except Exception:
-            return jsonify({"error": "Invalid image format."}), 400
-        
-        client = genai.Client(api_key=API_KEY)
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[prompt, {'mime_type': 'image/jpeg', 'data': image_bytes}]
-        )
-        
-        return jsonify({"feedback": response.text.strip()})
+    client = genai.Client(api_key=API_KEY)
     
-    except Exception as e:
-        logger.error(f"Analysis Error: {str(e)}")
-        return jsonify({"error": "An internal error occurred."}), 500
-
-@app.route('/report', methods=['POST'])
-def report():
-    # ... (كود التقرير بقى كيفما هو ماتقيسوش، راه ناضي) ...
-    if not API_KEY:
-        return jsonify({"error": "Server configuration error."}), 500
-
     try:
-        data = request.get_json()
-        session_history = data.get('history', [])
-        
-        if not session_history:
-            return jsonify({
-                "score": "0/10", 
-                "strengths": "No data collected.", 
-                "improvements": "Try starting a new session.", 
-                "next_step": "Ensure your camera is working."
-            })
-            
-        history_text = "\n".join(session_history)
-        prompt = f"""
-        Based on this session history: {history_text}
-        Provide a JSON report with exact keys: "score" (out of 10), "strengths", "improvements", "next_step". Keep values short.
-        """
-        
-        client = genai.Client(api_key=API_KEY)
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-            config={'response_mime_type': 'application/json'}
+        # إعداد Gemini Live API باش يجاوبنا بالصوت، ونعطيوه الشخصية ديال الكوتش
+        config = types.LiveConnectConfig(
+            response_modalities=[types.LiveModality.AUDIO],
+            system_instruction=types.Content(parts=[
+                types.Part.from_text("You are an expert physical therapy and fitness AI coach. You are watching a live video feed of the user. Guide them, correct their posture, and encourage them in real-time. Keep your instructions extremely short, energetic, and natural.")
+            ])
         )
-        import json
-        report_data = json.loads(response.text)
-        return jsonify(report_data)
         
+        # الاتصال المباشر مع موديل gemini-2.0-flash-exp (الخاص باللايف)
+        async with client.aio.live.connect(model="gemini-2.0-flash-exp", config=config) as session:
+            logger.info("🟢 Connected to Gemini Live API")
+
+            # مهمة 1: استقبال الصوت والصورة من التليفون ديالك وإرسالها لـ Gemini
+            async def receive_from_client():
+                try:
+                    while True:
+                        data = await websocket.receive_text()
+                        msg = json.loads(data)
+                        
+                        # إيلا جات صورة من الكاميرا
+                        if "image" in msg:
+                            image_b64 = msg["image"].split(',')[1] if "," in msg["image"] else msg["image"]
+                            image_bytes = base64.b64decode(image_b64)
+                            await session.send(input=types.LiveClientContent(
+                                turns=[types.Content(parts=[
+                                    types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
+                                ])]
+                            ))
+                        
+                        # إيلا جا صوت من المايك ديالك
+                        if "audio" in msg:
+                            audio_bytes = base64.b64decode(msg["audio"])
+                            await session.send(input=types.LiveClientContent(
+                                turns=[types.Content(parts=[
+                                    types.Part.from_bytes(data=audio_bytes, mime_type="audio/pcm;rate=16000")
+                                ])]
+                            ))
+                except WebSocketDisconnect:
+                    logger.info("🔴 Client disconnected")
+                except Exception as e:
+                    logger.error(f"Client receive error: {e}")
+
+            # مهمة 2: استقبال الصوت الأصلي ديال Gemini وإرسالو للتليفون ديالك
+            async def receive_from_gemini():
+                try:
+                    async for response in session.receive():
+                        if response.server_content and response.server_content.model_turn:
+                            for part in response.server_content.model_turn.parts:
+                                if part.inline_data and part.inline_data.mime_type.startswith("audio/pcm"):
+                                    # تحويل الصوت لـ Base64 باش يمشى فـ WebSocket
+                                    audio_b64 = base64.b64encode(part.inline_data.data).decode('utf-8')
+                                    await websocket.send_json({"audio": audio_b64})
+                except Exception as e:
+                    logger.error(f"Gemini receive error: {e}")
+
+            # تشغيل المهمتين فدقة وحدة (Real-time)
+            await asyncio.gather(receive_from_client(), receive_from_gemini())
+
     except Exception as e:
-        logger.error(f"Report Error: {str(e)}")
-        return jsonify({"error": "Failed to generate report."}), 500
+        logger.error(f"Session Error: {e}")
+        await websocket.close()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
-    app.run(debug=False, host='0.0.0.0', port=port)
+    uvicorn.run(app, host='0.0.0.0', port=port)
