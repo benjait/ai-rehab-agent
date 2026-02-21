@@ -23,44 +23,53 @@ async def get():
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+
     if not API_KEY:
         await websocket.send_json({"error": "Missing API KEY"})
         await websocket.close()
         return
 
-    # التحديث لـ 2026: استخدام v1beta و Gemini 2.5 Stable Live
     client = genai.Client(api_key=API_KEY, http_options={'api_version': 'v1beta'})
-    
+
     try:
-        instr = "You are Kinetix AI, the world's first Gemini 2.5-powered live coach. Use your native audio capabilities to guide the user's movements in real-time."
-        
+        instr = "You are Kinetix AI, the world's first Gemini-powered live coach. Use your native audio capabilities to guide the user's movements in real-time."
+
         config = types.LiveConnectConfig(
-            response_modalities=["AUDIO"], 
+            response_modalities=["AUDIO"],
             system_instruction=types.Content(
                 parts=[types.Part.from_text(text=instr)]
             )
         )
-        
-        # الموديل المستقر للـ Live Audio
-        model_id = "gemini-2.5-flash-native-audio"
-        
+
+        # ✅ المودل الصحيح اللي كيدعم bidiGenerateContent مع v1beta
+        model_id = "gemini-2.0-flash-live-001"
+
         async with client.aio.live.connect(model=model_id, config=config) as session:
-            logger.info(f"🟢 Stable Live Connection established with {model_id}")
+            logger.info(f"🟢 Live Connection established with {model_id}")
 
             async def receive_from_client():
                 try:
                     while True:
                         data = await websocket.receive_text()
                         msg = json.loads(data)
+
                         if "image" in msg:
                             img_b64 = msg["image"].split(',')[1] if "," in msg["image"] else msg["image"]
                             await session.send(input=types.LiveClientContent(
-                                turns=[types.Content(parts=[types.Part.from_bytes(data=base64.b64decode(img_b64), mime_type="image/jpeg")])]
+                                turns=[types.Content(parts=[types.Part.from_bytes(
+                                    data=base64.b64decode(img_b64),
+                                    mime_type="image/jpeg"
+                                )])]
                             ))
+
                         if "audio" in msg:
                             await session.send(input=types.LiveClientContent(
-                                turns=[types.Content(parts=[types.Part.from_bytes(data=base64.b64decode(msg["audio"]), mime_type="audio/pcm;rate=16000")])]
+                                turns=[types.Content(parts=[types.Part.from_bytes(
+                                    data=base64.b64decode(msg["audio"]),
+                                    mime_type="audio/pcm;rate=16000"
+                                )])]
                             ))
+
                 except Exception as e:
                     logger.error(f"Client Stream Error: {e}")
 
