@@ -28,23 +28,24 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close()
         return
 
-    # الاتصال بالنسخة التجريبية اللي كتدعم الـ Live
-    client = genai.Client(api_key=API_KEY, http_options={'api_version': 'v1alpha'})
+    # التحديث لـ 2026: استخدام v1beta و Gemini 2.5 Stable Live
+    client = genai.Client(api_key=API_KEY, http_options={'api_version': 'v1beta'})
     
     try:
-        # الإرشادات ديال الكوتش
-        instr = "You are Kinetix AI, a pro physical therapy coach. Watch the user live and give short, immediate voice cues."
+        instr = "You are Kinetix AI, the world's first Gemini 2.5-powered live coach. Use your native audio capabilities to guide the user's movements in real-time."
         
         config = types.LiveConnectConfig(
             response_modalities=["AUDIO"], 
             system_instruction=types.Content(
-                parts=[types.Part.from_text(text=instr)] # تصحيح ليرور positional argument
+                parts=[types.Part.from_text(text=instr)]
             )
         )
         
-        # الرجوع للموديل اللي كيدعم bidiGenerateContent (اللايف)
-        async with client.aio.live.connect(model="gemini-2.0-flash-exp", config=config) as session:
-            logger.info("🟢 Live Connection established with Gemini 2.0 Flash Exp")
+        # الموديل المستقر للـ Live Audio
+        model_id = "gemini-2.5-flash-native-audio"
+        
+        async with client.aio.live.connect(model=model_id, config=config) as session:
+            logger.info(f"🟢 Stable Live Connection established with {model_id}")
 
             async def receive_from_client():
                 try:
@@ -78,7 +79,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except Exception as e:
         logger.error(f"Session Error: {e}")
-        # إرسال ليرور للواجهة باش نعرفو شنو واقع
         await websocket.send_json({"error": str(e)})
         await websocket.close()
 
