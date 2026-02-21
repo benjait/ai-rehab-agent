@@ -23,55 +23,52 @@ async def get():
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-
     if not API_KEY:
         await websocket.send_json({"error": "Missing API KEY"})
         await websocket.close()
         return
 
     client = genai.Client(api_key=API_KEY, http_options={'api_version': 'v1beta'})
-
+    
     try:
-        instr = "You are Kinetix AI, the world's first Gemini-powered live coach. Use your native audio capabilities to guide the user's movements in real-time."
-
+        # تعليمات صريحة لـ Gemini باش هو يبدا الهضرة (Initiate conversation)
+        instr = "You are Kinetix AI, a professional coach. As soon as the session starts, GREET the user and ask them to show you their movements. Speak directly and be energetic."
+        
         config = types.LiveConnectConfig(
-            response_modalities=["AUDIO"],
-            system_instruction=types.Content(
-                parts=[types.Part.from_text(text=instr)]
-            )
+            response_modalities=["AUDIO"], 
+            system_instruction=types.Content(parts=[types.Part.from_text(text=instr)])
         )
-
-        # ✅ المودل الشغال حالياً مع v1beta + bidiGenerateContent (فبراير 2026)
+        
+        # الموديل لي خدام ليك فـ europe-west1 حسب اللوݣز ديالك
         model_id = "gemini-2.5-flash-native-audio-preview-12-2025"
-
+        
         async with client.aio.live.connect(model=model_id, config=config) as session:
-            logger.info(f"🟢 Live Connection established with {model_id}")
+            logger.info(f"🟢 Active Session with {model_id}")
 
             async def receive_from_client():
                 try:
                     while True:
                         data = await websocket.receive_text()
                         msg = json.loads(data)
+                        
+                        # معالجة الصور بحذر
+                        if "image" in msg and msg["image"]:
+                            try:
+                                img_data = msg["image"].split(',')[1] if "," in msg["image"] else msg["image"]
+                                await session.send(input=types.LiveClientContent(
+                                    turns=[types.Content(parts=[types.Part.from_bytes(data=base64.b64decode(img_data), mime_type="image/jpeg")])]
+                                ))
+                            except: pass # تجاهل أخطاء الصور البسيطة
 
-                        if "image" in msg:
-                            img_b64 = msg["image"].split(',')[1] if "," in msg["image"] else msg["image"]
-                            await session.send(input=types.LiveClientContent(
-                                turns=[types.Content(parts=[types.Part.from_bytes(
-                                    data=base64.b64decode(img_b64),
-                                    mime_type="image/jpeg"
-                                )])]
-                            ))
-
-                        if "audio" in msg:
-                            await session.send(input=types.LiveClientContent(
-                                turns=[types.Content(parts=[types.Part.from_bytes(
-                                    data=base64.b64decode(msg["audio"]),
-                                    mime_type="audio/pcm;rate=16000"
-                                )])]
-                            ))
-
+                        # معالجة الصوت
+                        if "audio" in msg and msg["audio"]:
+                            try:
+                                await session.send(input=types.LiveClientContent(
+                                    turns=[types.Content(parts=[types.Part.from_bytes(data=base64.b64decode(msg["audio"]), mime_type="audio/pcm;rate=16000")])]
+                                ))
+                            except: pass
                 except Exception as e:
-                    logger.error(f"Client Stream Error: {e}")
+                    logger.error(f"Client Loop Error: {e}")
 
             async def receive_from_gemini():
                 try:
@@ -82,13 +79,12 @@ async def websocket_endpoint(websocket: WebSocket):
                                     audio_b64 = base64.b64encode(part.inline_data.data).decode('utf-8')
                                     await websocket.send_json({"audio": audio_b64})
                 except Exception as e:
-                    logger.error(f"Gemini Response Error: {e}")
+                    logger.error(f"Gemini Loop Error: {e}")
 
             await asyncio.gather(receive_from_client(), receive_from_gemini())
 
     except Exception as e:
-        logger.error(f"Session Error: {e}")
-        await websocket.send_json({"error": str(e)})
+        logger.error(f"Global Session Error: {e}")
         await websocket.close()
 
 if __name__ == '__main__':
