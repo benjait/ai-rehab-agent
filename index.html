@@ -3,232 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-width=1.0">
-    <title>Kinetix AI | Smart Physio Agent</title>
+    <title>Kinetix | Multimodal Live AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', system-ui, sans-serif; background-color: #f8fafc; color: #0f172a; }
-        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(0, 0, 0, 0.08); }
-        .pulse-ring { animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); } 70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+        body { font-family: 'Inter', system-ui, sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .pulse-ring { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); } 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } }
+        .live-badge { animation: blink 2s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     </style>
 </head>
-<body class="flex flex-col items-center min-h-screen p-4 md:p-8">
+<body class="flex flex-col items-center justify-center min-h-screen p-4 md:p-8">
 
-    <header class="text-center mb-8 w-full max-w-3xl">
-        <h1 class="text-4xl font-extrabold text-blue-600 mb-2">
-            <i class="fa-solid fa-wave-square text-blue-500"></i> Kinetix AI Agent
+    <header class="text-center mb-6 w-full max-w-2xl">
+        <h1 class="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300 mb-2">
+            <i class="fa-solid fa-bolt text-yellow-400"></i> Gemini Live Agent
         </h1>
-        <p class="text-slate-500 text-sm md:text-base font-medium">Real-time Multimodal Physio & Fitness Companion powered by Gemini</p>
+        <p class="text-slate-400 text-sm font-medium">Real-time Multimodal Voice & Vision Streaming</p>
     </header>
 
-    <div class="w-full max-w-3xl grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="w-full max-w-2xl relative glass-panel rounded-3xl overflow-hidden shadow-2xl aspect-[3/4] md:aspect-video flex items-center justify-center bg-black border border-slate-700">
+        <video id="userVideo" class="w-full h-full object-cover" autoplay playsinline muted></video>
+        <canvas id="hiddenCanvas" class="hidden"></canvas>
         
-        <div class="col-span-1 flex flex-col gap-4">
-            <div class="glass-panel p-5 rounded-2xl shadow-sm">
-                <label class="block text-slate-700 text-sm font-bold mb-3 uppercase tracking-wider">Select Session Type</label>
-                <div class="space-y-2">
-                    <select id="userMode" class="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 appearance-none font-medium">
-                        <option value="desk">💻 Desk Worker Posture</option>
-                        <option value="rehab">🦿 Post-Injury Rehab</option>
-                        <option value="senior">👵 Senior Care & Mobility</option>
-                        <option value="yoga">🧘‍♂️ Yoga & Flexibility</option>
-                    </select>
-                </div>
-            </div>
-
-            <button id="startBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg py-4 rounded-2xl shadow-md transition-all transform hover:scale-105 flex items-center justify-center gap-2">
-                <i class="fa-solid fa-play"></i> <span>Start Session</span>
-            </button>
-
-            <div id="feedbackBox" class="glass-panel p-5 rounded-2xl shadow-sm hidden flex-col justify-center items-center text-center border-l-4 border-blue-500 min-h-[120px] bg-blue-50/50">
-                <i class="fa-solid fa-comment-medical text-2xl text-blue-500 mb-2"></i>
-                <p id="feedbackText" class="text-slate-800 font-semibold text-sm">AI Coach is analyzing...</p>
-            </div>
-        </div>
-
-        <div class="col-span-1 md:col-span-2 relative glass-panel rounded-3xl overflow-hidden shadow-lg aspect-[4/3] md:aspect-video flex items-center justify-center bg-black">
-            <video id="userVideo" class="w-full h-full object-cover" autoplay playsinline muted></video>
-            <canvas id="hiddenCanvas" class="hidden"></canvas>
-            
-            <div id="recordingIndicator" class="hidden absolute top-4 left-4 flex items-center bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-full shadow-sm">
-                <div class="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-2"></div>
-                <span class="text-slate-800 text-xs font-bold tracking-wide">LIVE ANALYSIS</span>
-            </div>
+        <div id="statusIndicator" class="hidden absolute top-4 left-4 flex items-center bg-black/60 backdrop-blur-md px-4 py-2 rounded-full border border-slate-600">
+            <div class="w-3 h-3 bg-red-500 rounded-full live-badge mr-2"></div>
+            <span class="text-white text-xs font-bold tracking-widest uppercase">Live Connection</span>
         </div>
     </div>
 
-    <div id="reportModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
-        <div class="glass-panel rounded-3xl p-8 max-w-md w-full shadow-2xl relative transform transition-all scale-100 bg-white">
-            <button id="closeModalBtn" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-xl"><i class="fa-solid fa-xmark"></i></button>
-            
-            <div class="text-center mb-6">
-                <div class="inline-block p-4 rounded-full bg-blue-100 mb-3">
-                    <i class="fa-solid fa-trophy text-4xl text-blue-500"></i>
-                </div>
-                <h2 class="text-2xl font-bold text-slate-800">Session Complete!</h2>
-                <p class="text-slate-500 text-sm mt-1">Here is your AI-generated summary.</p>
-            </div>
-
-            <div class="space-y-4">
-                <div class="bg-slate-50 p-4 rounded-xl flex items-center justify-between border border-slate-200">
-                    <span class="text-slate-700 font-bold"><i class="fa-solid fa-star text-yellow-500 mr-2"></i>Overall Score</span>
-                    <span id="reportScore" class="text-2xl font-black text-blue-600">--/10</span>
-                </div>
-                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <h3 class="text-green-600 text-sm font-bold mb-1"><i class="fa-solid fa-arrow-trend-up mr-1"></i> Strengths</h3>
-                    <p id="reportStrengths" class="text-slate-700 text-sm font-medium">Loading...</p>
-                </div>
-                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <h3 class="text-orange-600 text-sm font-bold mb-1"><i class="fa-solid fa-bullseye mr-1"></i> Areas to Improve</h3>
-                    <p id="reportImprovements" class="text-slate-700 text-sm font-medium">Loading...</p>
-                </div>
-                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <h3 class="text-blue-600 text-sm font-bold mb-1"><i class="fa-solid fa-forward-step mr-1"></i> Next Step</h3>
-                    <p id="reportNext" class="text-slate-700 text-sm font-medium">Loading...</p>
-                </div>
-            </div>
-        </div>
+    <div class="mt-8 w-full max-w-2xl text-center">
+        <button id="startBtn" class="w-full md:w-auto bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-bold text-xl py-4 px-12 rounded-full shadow-lg transition-all transform hover:scale-105">
+            <i class="fa-solid fa-microphone-lines mr-2"></i> Connect to AI Coach
+        </button>
+        <p id="systemMsg" class="mt-4 text-slate-400 text-sm font-medium h-6"></p>
     </div>
 
     <script>
         const video = document.getElementById('userVideo');
         const canvas = document.getElementById('hiddenCanvas');
         const startBtn = document.getElementById('startBtn');
-        const indicator = document.getElementById('recordingIndicator');
-        const feedbackBox = document.getElementById('feedbackBox');
-        const feedbackText = document.getElementById('feedbackText');
-        const userMode = document.getElementById('userMode');
-        const reportModal = document.getElementById('reportModal');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const systemMsg = document.getElementById('systemMsg');
         
-        let isRecording = false;
-        let analyzeInterval;
-        let sessionHistory = []; 
+        let ws;
+        let stream;
+        let audioContext;
+        let processor;
+        let playContext;
+        let nextPlayTime = 0;
+        let imageInterval;
+        let isConnected = false;
 
-        // دالة نطق الصوت
-        function speakFeedback(text) {
-            if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel(); // باش ما يتداخلش الصوت
-                const msg = new SpeechSynthesisUtterance(text);
-                msg.lang = 'en-US';
-                msg.rate = 1.0;
-                window.speechSynthesis.speak(msg);
+        // دالة تشغيل الصوت الحقيقي ديال Gemini (24kHz PCM)
+        function playGeminiAudio(base64String) {
+            if (!playContext) {
+                playContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
             }
-        }
-
-        // دالة التقاط الصورة وإرسالها للسيرفور
-        async function captureAndAnalyze() {
-            if (!isRecording) return;
-            const context = canvas.getContext('2d');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            if (playContext.state === 'suspended') playContext.resume();
             
-            const imageData = canvas.toDataURL('image/jpeg', 0.5);
+            const binaryString = atob(base64String);
+            const buffer = new ArrayBuffer(binaryString.length);
+            const view = new DataView(buffer);
+            for (let i = 0; i < binaryString.length; i++) { view.setUint8(i, binaryString.charCodeAt(i)); }
             
-            try {
-                const response = await fetch('/analyze', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        image: imageData, 
-                        mode: userMode.value,
-                        history: sessionHistory // إرسال الذاكرة
-                    })
-                });
-                
-                const result = await response.json();
-                if (result.feedback) {
-                    feedbackText.textContent = result.feedback;
-                    sessionHistory.push(result.feedback); // تخزين الجواب فالذاكرة
-                    speakFeedback(result.feedback);
-                } else if (result.error) {
-                    console.error("Server Error:", result.error);
-                }
-            } catch (error) {
-                console.error("Analysis Error:", error);
-            }
+            const int16Array = new Int16Array(buffer);
+            const float32Array = new Float32Array(int16Array.length);
+            for (let i = 0; i < int16Array.length; i++) { float32Array[i] = int16Array[i] / 32768.0; }
+
+            const audioBuffer = playContext.createBuffer(1, float32Array.length, 24000);
+            audioBuffer.getChannelData(0).set(float32Array);
+
+            const source = playContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(playContext.destination);
+            
+            const currentTime = playContext.currentTime;
+            if (nextPlayTime < currentTime) nextPlayTime = currentTime;
+            source.start(nextPlayTime);
+            nextPlayTime += audioBuffer.duration;
         }
 
-        // دالة جلب التقرير النهائي
-        async function generateFinalReport() {
-            reportModal.classList.remove('hidden');
-            document.getElementById('reportScore').textContent = "...";
-            document.getElementById('reportStrengths').textContent = "Analyzing session data...";
-            document.getElementById('reportImprovements').textContent = "Analyzing session data...";
-            document.getElementById('reportNext').textContent = "Analyzing session data...";
-
+        async function startLiveSession() {
             try {
-                const response = await fetch('/report', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ history: sessionHistory })
-                });
-                const report = await response.json();
-                
-                document.getElementById('reportScore').textContent = report.score || "N/A";
-                document.getElementById('reportStrengths').textContent = report.strengths || "No data.";
-                document.getElementById('reportImprovements').textContent = report.improvements || "No data.";
-                document.getElementById('reportNext').textContent = report.next_step || "Rest and recover.";
-            } catch (error) {
-                console.error("Report Error:", error);
-                document.getElementById('reportStrengths').textContent = "Failed to generate report.";
-            }
-        }
+                systemMsg.textContent = "Requesting camera and microphone...";
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
+                video.srcObject = stream;
 
-        // زر التشغيل والإيقاف
-        startBtn.addEventListener('click', async () => {
-            if (!isRecording) {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-                    video.srcObject = stream;
+                systemMsg.textContent = "Connecting to Gemini Live Servers...";
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+                ws.onopen = () => {
+                    isConnected = true;
+                    systemMsg.textContent = "Connected! Start talking and moving.";
+                    startBtn.innerHTML = '<i class="fa-solid fa-phone-slash mr-2"></i> End Session';
+                    startBtn.className = "w-full md:w-auto bg-red-600 hover:bg-red-500 text-white font-bold text-xl py-4 px-12 rounded-full shadow-lg transition-all pulse-ring";
+                    statusIndicator.classList.remove('hidden');
+
+                    // 1. التقاط المايكروفون وإرسال الصوت (16kHz PCM)
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                    const source = audioContext.createMediaStreamSource(stream);
+                    processor = audioContext.createScriptProcessor(4096, 1, 1);
                     
-                    // خدعة تشغيل الصوت فالهاتف (تفعيل الـ Audio Context)
-                    if ('speechSynthesis' in window) {
-                        const wakeUpMsg = new SpeechSynthesisUtterance("");
-                        window.speechSynthesis.speak(wakeUpMsg);
+                    processor.onaudioprocess = (e) => {
+                        if (ws.readyState === WebSocket.OPEN) {
+                            const inputData = e.inputBuffer.getChannelData(0);
+                            const pcm16 = new Int16Array(inputData.length);
+                            for (let i = 0; i < inputData.length; i++) {
+                                pcm16[i] = Math.max(-1, Math.min(1, inputData[i])) * 32767;
+                            }
+                            const buffer = new Uint8Array(pcm16.buffer);
+                            let binary = '';
+                            for (let i = 0; i < buffer.byteLength; i++) { binary += String.fromCharCode(buffer[i]); }
+                            ws.send(JSON.stringify({ audio: btoa(binary) }));
+                        }
+                    };
+                    
+                    const gainNode = audioContext.createGain();
+                    gainNode.gain.value = 0; // باش ما تسمعش صوتك كيتعاود
+                    source.connect(processor);
+                    processor.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+
+                    // 2. إرسال صورة كل ثانية
+                    imageInterval = setInterval(() => {
+                        if (ws.readyState === WebSocket.OPEN) {
+                            const context = canvas.getContext('2d');
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                            // ضغط الصورة باش تمشي بالزربة
+                            const imageData = canvas.toDataURL('image/jpeg', 0.4);
+                            ws.send(JSON.stringify({ image: imageData }));
+                        }
+                    }, 1500);
+                };
+
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.audio) {
+                        playGeminiAudio(data.audio);
                     }
-                    
-                    sessionHistory = []; 
-                    startBtn.innerHTML = '<i class="fa-solid fa-stop"></i> <span>End Session & Get Report</span>';
-                    startBtn.className = "w-full bg-red-500 hover:bg-red-600 text-white font-bold text-lg py-4 rounded-2xl shadow-md transition-all transform hover:scale-105 flex items-center justify-center gap-2 pulse-ring";
-                    
-                    indicator.classList.remove('hidden');
-                    feedbackBox.classList.remove('hidden');
-                    feedbackBox.classList.add('flex');
-                    feedbackText.textContent = "Coach is preparing your first exercise...";
-                    userMode.disabled = true;
-                    isRecording = true;
+                };
 
-                    // البدأ بعد ثانية واحدة، ثم إعادة التحليل كل 6 ثواني
-                    setTimeout(captureAndAnalyze, 1000);
-                    analyzeInterval = setInterval(captureAndAnalyze, 6000); 
-                    
-                } catch (err) {
-                    alert("Please allow camera access to use the AI Agent.");
-                }
-            } else {
-                const tracks = video.srcObject.getTracks();
-                tracks.forEach(track => track.stop());
-                video.srcObject = null;
-                clearInterval(analyzeInterval);
-                
-                startBtn.innerHTML = '<i class="fa-solid fa-play"></i> <span>Start New Session</span>';
-                startBtn.className = "w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg py-4 rounded-2xl shadow-md transition-all transform hover:scale-105 flex items-center justify-center gap-2";
-                indicator.classList.add('hidden');
-                userMode.disabled = false;
-                isRecording = false;
-                feedbackText.textContent = "Session ended. Generating report...";
-                
-                await generateFinalReport();
+                ws.onclose = () => { stopLiveSession(); systemMsg.textContent = "Connection closed."; };
+
+            } catch (err) {
+                console.error(err);
+                systemMsg.textContent = "Error: Please allow Camera & Mic access.";
             }
-        });
+        }
 
-        // زر إغلاق نافذة التقرير
-        document.getElementById('closeModalBtn').addEventListener('click', () => {
-            reportModal.classList.add('hidden');
-            feedbackBox.classList.add('hidden');
-            feedbackBox.classList.remove('flex');
+        function stopLiveSession() {
+            if (ws) ws.close();
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            if (audioContext) audioContext.close();
+            if (processor) processor.disconnect();
+            clearInterval(imageInterval);
+            
+            video.srcObject = null;
+            isConnected = false;
+            
+            startBtn.innerHTML = '<i class="fa-solid fa-microphone-lines mr-2"></i> Connect to AI Coach';
+            startBtn.className = "w-full md:w-auto bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-bold text-xl py-4 px-12 rounded-full shadow-lg transition-all transform hover:scale-105";
+            statusIndicator.classList.add('hidden');
+        }
+
+        startBtn.addEventListener('click', () => {
+            if (!isConnected) { startLiveSession(); } else { stopLiveSession(); }
         });
     </script>
 </body>
