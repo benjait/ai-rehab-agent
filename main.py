@@ -28,22 +28,23 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close()
         return
 
-    # الاتصال بـ v1alpha للوصول لميزات الـ Live
+    # الاتصال بالنسخة التجريبية اللي كتدعم الـ Live
     client = genai.Client(api_key=API_KEY, http_options={'api_version': 'v1alpha'})
     
     try:
-        # تصحيح الـ Config والـ Part.from_text
-        system_msg = "You are Kinetix AI, a professional physical therapy coach. Guide the user live via video. Give short, clear voice instructions."
+        # الإرشادات ديال الكوتش
+        instr = "You are Kinetix AI, a pro physical therapy coach. Watch the user live and give short, immediate voice cues."
         
         config = types.LiveConnectConfig(
             response_modalities=["AUDIO"], 
             system_instruction=types.Content(
-                parts=[types.Part.from_text(text=system_msg)] # هنا درنا text= باش نكونو آمنين
+                parts=[types.Part.from_text(text=instr)] # تصحيح ليرور positional argument
             )
         )
         
-        async with client.aio.live.connect(model="gemini-2.5-flash", config=config) as session:
-            logger.info("🟢 Successfully connected to Gemini 2.5 Flash Live")
+        # الرجوع للموديل اللي كيدعم bidiGenerateContent (اللايف)
+        async with client.aio.live.connect(model="gemini-2.0-flash-exp", config=config) as session:
+            logger.info("🟢 Live Connection established with Gemini 2.0 Flash Exp")
 
             async def receive_from_client():
                 try:
@@ -51,9 +52,9 @@ async def websocket_endpoint(websocket: WebSocket):
                         data = await websocket.receive_text()
                         msg = json.loads(data)
                         if "image" in msg:
-                            img_data = msg["image"].split(',')[1] if "," in msg["image"] else msg["image"]
+                            img_b64 = msg["image"].split(',')[1] if "," in msg["image"] else msg["image"]
                             await session.send(input=types.LiveClientContent(
-                                turns=[types.Content(parts=[types.Part.from_bytes(data=base64.b64decode(img_data), mime_type="image/jpeg")])]
+                                turns=[types.Content(parts=[types.Part.from_bytes(data=base64.b64decode(img_b64), mime_type="image/jpeg")])]
                             ))
                         if "audio" in msg:
                             await session.send(input=types.LiveClientContent(
@@ -76,7 +77,8 @@ async def websocket_endpoint(websocket: WebSocket):
             await asyncio.gather(receive_from_client(), receive_from_gemini())
 
     except Exception as e:
-        logger.error(f"Live Session Failure: {e}")
+        logger.error(f"Session Error: {e}")
+        # إرسال ليرور للواجهة باش نعرفو شنو واقع
         await websocket.send_json({"error": str(e)})
         await websocket.close()
 
